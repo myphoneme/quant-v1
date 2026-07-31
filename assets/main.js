@@ -87,7 +87,7 @@
       hero.insertBefore(canvas, hero.firstChild);
 
       var particles = [];
-      var pointer = { x: 0, y: 0, active: false };
+      var pointer = { x: 0, y: 0, renderX: 0, renderY: 0, active: false, initialized: false };
       var width = 0;
       var height = 0;
       var pixelRatio = 1;
@@ -106,8 +106,8 @@
         context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
 
         var count = desktopDensity
-          ? Math.min(260, Math.max(150, Math.round(width / 6.5)))
-          : Math.min(70, Math.max(42, Math.round(width / 9)));
+          ? Math.min(125, Math.max(78, Math.round(width / 12)))
+          : Math.min(44, Math.max(28, Math.round(width / 13)));
         particles = [];
         for (var i = 0; i < count; i += 1) {
           var baseX = Math.random() * width;
@@ -121,11 +121,11 @@
             vy: 0,
             phase: Math.random() * Math.PI * 2,
             speed: 0.35 + Math.random() * 0.45,
-            drift: 4 + Math.random() * 7,
-            length: 4 + Math.random() * 6,
-            width: 1.3 + Math.random() * 1.7,
+            drift: 2 + Math.random() * 4,
+            length: 2 + Math.random() * 3.5,
+            width: 0.8 + Math.random() * 0.85,
             color: colors[Math.floor(Math.random() * colors.length)],
-            alpha: 0.35 + Math.random() * 0.3
+            alpha: 0.12 + Math.random() * 0.18
           });
         }
       }
@@ -138,17 +138,34 @@
         pointer.active =
           pointer.x >= 0 && pointer.x <= bounds.width &&
           pointer.y >= 0 && pointer.y <= bounds.height;
+        if (pointer.active && !pointer.initialized) {
+          pointer.renderX = pointer.x;
+          pointer.renderY = pointer.y;
+          pointer.initialized = true;
+        }
       }
 
       hero.addEventListener("pointermove", updatePointer, { passive: true });
       hero.addEventListener("pointerenter", updatePointer, { passive: true });
       hero.addEventListener("pointerleave", function () {
         pointer.active = false;
+        pointer.initialized = false;
       }, { passive: true });
 
       function draw(time) {
         context.clearRect(0, 0, width, height);
         var seconds = time * 0.001;
+        if (pointer.active) {
+          pointer.renderX += (pointer.x - pointer.renderX) * 0.16;
+          pointer.renderY += (pointer.y - pointer.renderY) * 0.16;
+          var glowRadius = 95;
+          var glow = context.createRadialGradient(pointer.renderX, pointer.renderY, 0, pointer.renderX, pointer.renderY, glowRadius);
+          glow.addColorStop(0, "rgba(255,107,39,0.09)");
+          glow.addColorStop(0.48, "rgba(124,58,237,0.045)");
+          glow.addColorStop(1, "rgba(37,99,235,0)");
+          context.fillStyle = glow;
+          context.fillRect(pointer.renderX - glowRadius, pointer.renderY - glowRadius, glowRadius * 2, glowRadius * 2);
+        }
 
         particles.forEach(function (particle) {
           var targetX = particle.baseX + Math.sin(seconds * particle.speed + particle.phase) * particle.drift;
@@ -156,21 +173,21 @@
           var proximity = 0;
 
           if (pointer.active) {
-            var dx = targetX - pointer.x;
-            var dy = targetY - pointer.y;
+            var dx = targetX - pointer.renderX;
+            var dy = targetY - pointer.renderY;
             var distance = Math.sqrt(dx * dx + dy * dy) || 1;
-            var radius = Math.min(620, Math.max(380, width * 0.4));
+            var radius = Math.min(440, Math.max(280, width * 0.28));
 
             if (distance < radius) {
               proximity = 1 - distance / radius;
-              var curve = proximity * proximity * 1.35;
-              var expansion = 1 + proximity * 0.22;
+              var curve = proximity * proximity * 1.05;
+              var expansion = 1 + proximity * 0.16;
               var cosine = Math.cos(curve);
               var sine = Math.sin(curve);
               var curvedX = (dx * cosine - dy * sine) * expansion;
               var curvedY = (dx * sine + dy * cosine) * expansion;
-              targetX = pointer.x + curvedX;
-              targetY = pointer.y + curvedY;
+              targetX = pointer.renderX + curvedX;
+              targetY = pointer.renderY + curvedY;
             }
           }
 
@@ -182,7 +199,7 @@
           particle.y += particle.vy;
 
           var angle = pointer.active
-            ? Math.atan2(particle.y - pointer.y, particle.x - pointer.x) + Math.PI * 0.5
+            ? Math.atan2(particle.y - pointer.renderY, particle.x - pointer.renderX) + Math.PI * 0.5
             : Math.atan2(particle.vy, particle.vx);
           var halfLength = particle.length * (1 + proximity * 1.65) * 0.5;
           context.beginPath();
@@ -195,7 +212,7 @@
             particle.y + Math.sin(angle) * halfLength
           );
           context.strokeStyle = particle.color;
-          context.globalAlpha = Math.min(0.86, particle.alpha + proximity * 0.36);
+          context.globalAlpha = Math.min(0.58, particle.alpha + proximity * 0.32);
           context.lineWidth = particle.width;
           context.lineCap = "round";
           context.stroke();
@@ -205,7 +222,8 @@
         window.requestAnimationFrame(draw);
       }
 
-      buildParticles();      if ("ResizeObserver" in window) {
+      buildParticles();
+      if ("ResizeObserver" in window) {
         new ResizeObserver(buildParticles).observe(hero);
       } else {
         window.addEventListener("resize", buildParticles);
